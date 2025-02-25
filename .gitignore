@@ -1,0 +1,18 @@
+# Data files and directories (adjust as needed)
+data/
+dataset/
+ignore
+
+# Environments (conda, virtualenv, etc.)
+.env
+.venv
+env/
+venv/
+
+# VS Code settings
+.vscode/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+__pycache__/
+.DS_Store
