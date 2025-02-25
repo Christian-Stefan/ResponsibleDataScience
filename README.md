@@ -15,7 +15,8 @@ Project description
   - `solution_template.csv`
   - `training_v2.csv`
   - `unlabeled.csv`
-  - `WiDS_Datathon_2020_Dictionary.csv`  
+  - `WiDS_Datathon_2020_Dictionary.csv`
+  The dataset can be downloaded from [PhysioNet's WiDS Datathon 2020](https://physionet.org/content/widsdatathon2020/1.0.0/) (scroll down to the bottom of the page).
 
 - **ignore/**  
   A directory reserved for files or folders that should be ignored.
