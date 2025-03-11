@@ -1,5 +1,5 @@
 # 2IX30 Responsible Data Science Group Project - 2025
-Project description
+The project report can be found on [Overleaf](https://www.overleaf.com/project/67b88e041f2677e432a94c2c)
 
 # Folder Structure
 
