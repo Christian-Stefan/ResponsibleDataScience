@@ -2,12 +2,14 @@
 data/
 dataset/
 ignore
+*.pdf
 
 # Environments (conda, virtualenv, etc.)
 .env
 .venv
 env/
 venv/
+.idea/
 
 # VS Code settings
 .vscode/
