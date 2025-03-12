@@ -6,3 +6,6 @@ scikit-learn>=1.0.0
 scipy>=1.7.0 
 aif360>=0.6.1
 fairlearn>=0.12.0
+shap>=0.47.0
+lime>=0.2.0.1
+interpret>=0.6.9
