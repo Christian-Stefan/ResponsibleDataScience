@@ -8,6 +8,7 @@ from sklearn.impute import IterativeImputer
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 from sklearn.pipeline import Pipeline
+import pickle
 
 def load_data(data_dir='../data/'):
     description = pd.read_csv(os.path.join(data_dir, 'WiDS_Datathon_2020_Dictionary.csv'))
@@ -101,3 +102,35 @@ def filter_high_missing_columns(X_train, X_test, threshold=80):
     X_train_filtered = X_train.drop(columns=high_missing_cols)
     X_test_filtered = X_test.drop(columns=high_missing_cols)
     return X_train_filtered, X_test_filtered, high_missing_cols
+
+def save_processed_data(X_train, X_test, y_train, y_test, numerical_cols, categorical_cols, description_dict, filepath):
+    """Save processed data to a pickle file."""
+    processed_data = {
+        'X_train': X_train,
+        'X_test': X_test,
+        'y_train': y_train,
+        'y_test': y_test,
+        'numerical_cols': numerical_cols,
+        'categorical_cols': categorical_cols,
+        'description_dict': description_dict
+    }
+    
+    with open(filepath, 'wb') as f:
+        pickle.dump(processed_data, f)
+    
+    print(f"Processed data saved to {filepath}")
+    
+    # Print some basic statistics about the data
+    print("\nBasic statistics:")
+    print(f"Number of training samples: {len(X_train)}")
+    print(f"Number of testing samples: {len(X_test)}")
+    print(f"Number of numerical features: {len(numerical_cols)}")
+    print(f"Number of categorical features: {len(categorical_cols)}")
+    print(f"Mortality rate in training set: {y_train.mean():.2%}")
+    print(f"Mortality rate in testing set: {y_test.mean():.2%}")
+
+def load_processed_data(filepath):
+    """Load processed data from a pickle file."""
+    with open(filepath, 'rb') as f:
+        data = pickle.load(f)
+    return data

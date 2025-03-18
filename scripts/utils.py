@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import os
+import pickle
 from sklearn.metrics import roc_auc_score, precision_score, recall_score, f1_score
 
 
@@ -103,3 +104,41 @@ def calculate_performance_metrics(y_true, y_pred, y_proba=None):
     if y_proba is not None:
         metrics['roc_auc'] = roc_auc_score(y_true, y_proba)
     return metrics
+
+
+def save_model(model, filename):
+    """Save a trained model to a file."""
+    with open(filename, 'wb') as f:
+        pickle.dump(model, f)
+    print(f"Model saved to {filename}")
+
+
+def load_model(filename):
+    """Load a trained model from a file."""
+    with open(filename, 'rb') as f:
+        model = pickle.load(f)
+    return model
+
+
+def export_model_performance(model_name, X_test, y_test, model, filename='model_performance.csv'):
+    """Export model performance metrics to a CSV file."""
+    y_pred = model.predict(X_test)
+    y_proba = model.predict_proba(X_test)[:, 1]
+    metrics = calculate_performance_metrics(y_test, y_pred, y_proba)
+    
+    performance = {
+        'model_name': model_name,
+        'roc_auc': metrics['roc_auc'],
+        'accuracy': metrics['accuracy'],
+        'precision': metrics['precision'],
+        'recall': metrics['recall'],
+        'f1': metrics['f1']
+    }
+    
+    performance_df = pd.DataFrame([performance])
+    file_exists = os.path.isfile(filename)
+    if file_exists:
+        performance_df.to_csv(filename, mode='a', header=False, index=False)
+    else:
+        performance_df.to_csv(filename, index=False)
+    print(f"Model performance exported to {filename}")
