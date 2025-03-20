@@ -173,7 +173,7 @@ def train_and_evaluate_all_imputation_strategies(X_train, X_test, y_train, y_tes
         classifier = RandomForestClassifier(
             n_estimators=100,
             max_depth=10,
-            random_state=42,
+            random_state=1,
             class_weight='balanced'  # Handle class imbalance
         )
         
@@ -227,7 +227,7 @@ def hyperparameter_tuning(X_train, y_train, preprocessor, param_grid=None, cv=3,
         }
     pipeline = Pipeline([
         ('preprocessor', preprocessor),
-        ('classifier', RandomForestClassifier(random_state=42, class_weight='balanced', n_jobs=-1))
+        ('classifier', RandomForestClassifier(random_state=1, class_weight='balanced', n_jobs=-1))
     ])
     print("Starting grid search. This might take some time...")
     grid_search = GridSearchCV(
@@ -575,7 +575,7 @@ def plot_heatmap(data, title="Heatmap", xlabel="X", ylabel="Y"):
     plt.tight_layout()
     plt.show()
 
-def create_lasso_pipeline(preprocessor, C=1.0, random_state=42):
+def create_lasso_pipeline(preprocessor, C=1.0, random_state=1):
     pipeline = Pipeline(steps=[
         ('preprocessor', preprocessor),
         ('classifier', LogisticRegression(
@@ -664,7 +664,7 @@ def get_model_candidates():
     
     models = {
         'logistic_regression': {
-            'model': LogisticRegression(random_state=42),
+            'model': LogisticRegression(random_state=1),
             'params': {
                 'classifier__C': [0.001, 0.01, 0.1, 1, 10],
                 'classifier__class_weight': ['balanced', None],
@@ -672,7 +672,7 @@ def get_model_candidates():
             }
         },
         'decision_tree': {
-            'model': DecisionTreeClassifier(random_state=42),
+            'model': DecisionTreeClassifier(random_state=1),
             'params': {
                 'classifier__max_depth': [3, 5, 7, 10],
                 'classifier__min_samples_split': [2, 5, 10],
@@ -681,7 +681,7 @@ def get_model_candidates():
             }
         },
         'random_forest': {
-            'model': RandomForestClassifier(random_state=42),
+            'model': RandomForestClassifier(random_state=1),
             'params': {
                 'classifier__n_estimators': [100, 200, 300],
                 'classifier__max_depth': [5, 10, 15],
@@ -691,7 +691,7 @@ def get_model_candidates():
             }
         },
         'xgboost': {
-            'model': xgb.XGBClassifier(random_state=42),
+            'model': xgb.XGBClassifier(random_state=1),
             'params': {
                 'classifier__n_estimators': [100, 200, 300],
                 'classifier__max_depth': [3, 5, 7],
@@ -880,6 +880,9 @@ def train_fairness_constrained_model(X_train, y_train, sensitive_features, const
     """
     from fairlearn.reductions import ExponentiatedGradient, DemographicParity, EqualizedOdds
     from sklearn.ensemble import RandomForestClassifier
+    from sklearn.preprocessing import OneHotEncoder
+    from sklearn.compose import ColumnTransformer
+    from sklearn.pipeline import Pipeline
     
     # Ensure data types are appropriate for fairness constraints
     y_train = pd.Series(y_train).astype(int)
@@ -892,8 +895,23 @@ def train_fairness_constrained_model(X_train, y_train, sensitive_features, const
     
     print("Setting up fairness constrained model...")
     
-    # Base estimator
-    estimator = RandomForestClassifier(n_estimators=100, random_state=42)
+    # Create preprocessing pipeline for categorical features
+    categorical_features = X_train.select_dtypes(include=['object', 'category']).columns
+    numerical_features = X_train.select_dtypes(include=['int64', 'float64']).columns
+    
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', 'passthrough', numerical_features),
+            ('cat', OneHotEncoder(drop='first', sparse=False), categorical_features)
+        ],
+        remainder='drop'
+    )
+    
+    # Base estimator with preprocessing
+    estimator = Pipeline([
+        ('preprocessor', preprocessor),
+        ('classifier', RandomForestClassifier(n_estimators=100, random_state=1))
+    ])
     
     # Select constraint
     if constraint_type == 'demographic_parity':
@@ -918,18 +936,12 @@ def train_fairness_constrained_model(X_train, y_train, sensitive_features, const
     
     def progress_callback(iteration_number):
         # Update progress bar (assume max 100 iterations)
-        increment = min(iteration_number - last_iter[0], 100 - pbar.n)
-        if increment > 0:
-            pbar.update(increment)
+        if iteration_number > last_iter[0]:
+            pbar.update(iteration_number - last_iter[0])
             last_iter[0] = iteration_number
     
-    # Fit model with fairness constraints
     print("Starting fairness constrained training (this may take a while)...")
-    mitigator.fit(X_train, y_train, sensitive_features=sensitive_features)
-    
-    # Complete the progress bar
-    pbar.update(100 - pbar.n)
+    mitigator.fit(X_train, y_train, sensitive_features=sensitive_features, progress_callback=progress_callback)
     pbar.close()
     
-    print("Fairness constrained model training completed")
     return mitigator
