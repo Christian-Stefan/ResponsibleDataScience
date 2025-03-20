@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 """
 Script to perform in-depth analysis on the trained models and results.
 """
@@ -15,143 +18,115 @@ import modeling as mdl
 import visualization as viz
 import utils
 import config
+from data_processing import load_processed_data
 
 def main():
-    """Run analysis pipeline."""
-    # Create directories if they don't exist
-    analysis_dir = os.path.join(config.RESULTS_DIR, 'analysis')
-    os.makedirs(analysis_dir, exist_ok=True)
+    """Run the analysis pipeline."""
+    print("Starting analysis pipeline...")
     
-    # Load preprocessed data
-    print("Loading preprocessed data...")
-    with open(os.path.join(config.RESULTS_DIR, 'processed_data.pkl'), 'rb') as f:
-        data = pickle.load(f)
-    
-    X_train = data['X_train']
-    X_test = data['X_test']
-    y_train = data['y_train']
-    y_test = data['y_test']
-    numerical_cols = data['numerical_cols']
-    categorical_cols = data['categorical_cols']
-    
-    # Load best model (assuming it exists from run_modeling.py)
-    best_strategy = "simple"  # Default, but will look for better ones
-    
-    # Try to find the best strategy from previous results
-    try:
-        with open(os.path.join(config.RESULTS_DIR, 'feature_importance.csv'), 'r') as f:
-            # The filename could indicate the best strategy
-            pass
-    except FileNotFoundError:
-        print("Feature importance file not found, using default strategy.")
-    
-    # Load best model
-    print(f"\nLoading best model (strategy: {best_strategy})...")
-    try:
-        with open(os.path.join(config.MODELS_DIR, f'rf_{best_strategy}.pkl'), 'rb') as f:
-            best_model = pickle.load(f)
-    except FileNotFoundError:
-        print(f"Model file not found. Run run_modeling.py first.")
+    # Load processed data
+    print("\nLoading processed data...")
+    processed_data = load_processed_data(
+        os.path.join(config.RESULTS_DIR, 'processed_data.pkl')
+    )
+    if processed_data is None:
+        print("Failed to load processed data. Exiting...")
         return
     
-    # Analyze model performance across different body systems
-    print("\nAnalyzing model performance across different body systems...")
-    body_system_results = mdl.analyze_by_body_system(
-        X_train, y_train, X_test, y_test, 
-        numerical_cols, categorical_cols, best_strategy
+    X_test = processed_data['X_test']
+    y_test = processed_data['y_test']
+    
+    # Load best model
+    print("\nLoading best model...")
+    model_files = [f for f in os.listdir(config.MODELS_DIR) 
+                  if f.startswith('best_model_')]
+    if not model_files:
+        print("No model files found. Exiting...")
+        return
+    
+    best_model_file = model_files[0]  # Assuming first file is best model
+    best_model_path = os.path.join(config.MODELS_DIR, best_model_file)
+    
+    with open(best_model_path, 'rb') as f:
+        best_model = pickle.load(f)
+    
+    # Analyze classification thresholds
+    print("\nAnalyzing classification thresholds...")
+    threshold_results = mdl.analyze_classification_thresholds(
+        best_model, X_test, y_test,
+        threshold_range=config.THRESHOLD_RANGE,
+        threshold_step=config.THRESHOLD_STEP
+    )
+    viz.plot_threshold_analysis_results(threshold_results)
+    
+    # Analyze performance by body system
+    print("\nAnalyzing performance by body system...")
+    body_system_results = mdl.analyze_performance_by_body_system(
+        best_model, X_test, y_test,
+        min_samples=config.MIN_SAMPLES_PER_SYSTEM,
+        min_test_samples=config.MIN_TEST_SAMPLES_PER_SYSTEM
+    )
+    viz.plot_performance_by_body_system(body_system_results)
+    
+    # Analyze detailed body system analysis
+    print("\nPerforming detailed body system analysis...")
+    detailed_results = mdl.analyze_by_body_system(
+        best_model, X_test, y_test
+    )
+    viz.plot_body_system_analysis_results(detailed_results)
+    
+    # Analyze fairness metrics by ethnicity
+    print("\nAnalyzing fairness metrics by ethnicity...")
+    fairness_results = mdl.analyze_fairness_by_ethnicity(
+        best_model, X_test, y_test
+    )
+    viz.plot_fairness_metrics(fairness_results)
+    
+    # Analyze intersectional fairness
+    print("\nAnalyzing intersectional fairness...")
+    intersectional_results = mdl.analyze_intersectional_fairness(
+        best_model, X_test, y_test,
+        config.PROTECTED_ATTRIBUTES
+    )
+    viz.plot_intersectional_fairness(intersectional_results)
+    
+    # Perform SHAP analysis
+    print("\nPerforming SHAP analysis...")
+    shap_results = mdl.analyze_with_shap(
+        best_model, X_test,
+        n_samples=config.SHAP_N_SAMPLES,
+        n_features=config.SHAP_N_FEATURES
+    )
+    viz.plot_shap_summary(shap_results)
+    
+    # Perform LIME analysis
+    print("\nPerforming LIME analysis...")
+    lime_results = mdl.explain_with_lime(
+        best_model, X_test,
+        n_features=config.LIME_N_FEATURES,
+        n_samples=config.LIME_N_SAMPLES
+    )
+    viz.plot_lime_explanations(lime_results)
+    
+    # Analyze feature importance
+    print("\nAnalyzing feature importance...")
+    feature_names = mdl.get_feature_names(best_model.named_steps['preprocessor'])
+    feature_importances = best_model.named_steps['classifier'].feature_importances_
+    viz.plot_feature_importance(
+        feature_names,
+        feature_importances,
+        top_n=config.TOP_N_FEATURES
     )
     
-    if body_system_results is not None:
-        # Compare AUC scores across body systems
-        body_system_auc = {system: results['results']['roc_auc'] 
-                          for system, results in body_system_results.items()}
-        
-        auc_df = pd.DataFrame({'AUC': body_system_auc}).sort_values('AUC', ascending=False)
-        auc_df.to_csv(os.path.join(analysis_dir, 'body_system_auc.csv'))
-        
-        # Plot AUC by body system
-        plt.figure(figsize=(12, 6))
-        sns.barplot(x=auc_df.index, y=auc_df['AUC'])
-        plt.title('ROC AUC Score by Body System')
-        plt.ylabel('AUC Score')
-        plt.xlabel('Body System')
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        plt.savefig(os.path.join(analysis_dir, 'body_system_auc.png'))
-        plt.close()
-        
-        # Save feature importance by body system
-        feature_names = mdl.get_feature_names(best_model.named_steps['preprocessor'])
-        
-        for system, results in body_system_results.items():
-            # Clean system name for filename
-            system_clean = system.replace('/', '_').replace(' ', '_').lower()
-            
-            # Save feature importance data
-            importance_df = pd.DataFrame({
-                'Feature': feature_names[:len(results['feature_importances'])],
-                'Importance': results['feature_importances']
-            }).sort_values('Importance', ascending=False)
-            
-            importance_df.to_csv(os.path.join(
-                analysis_dir, f'feature_importance_{system_clean}.csv'))
+    # Analyze model calibration
+    print("\nAnalyzing model calibration...")
+    calibration_results = mdl.analyze_calibration(
+        best_model, X_test, y_test,
+        n_bins=config.N_CALIBRATION_BINS
+    )
+    viz.plot_calibration_curve(calibration_results)
     
-    # Find optimal threshold for classification
-    print("\nFinding optimal classification threshold...")
-    y_proba = best_model.predict_proba(X_test)[:, 1]
-    optimal_threshold, best_f1 = utils.get_optimal_threshold(y_test, y_proba, metric='f1')
-    
-    print(f"Optimal threshold: {optimal_threshold:.3f} (F1: {best_f1:.3f})")
-    
-    # Evaluate with optimal threshold
-    y_pred_optimal = (y_proba >= optimal_threshold).astype(int)
-    print("\nPerformance with optimal threshold:")
-    print(classification_report(y_test, y_pred_optimal))
-    
-    # Save precision-recall curve
-    plt.figure(figsize=(8, 6))
-    precision, recall, thresholds = precision_recall_curve(y_test, y_proba)
-    plt.plot(recall, precision)
-    plt.axvline(recall[np.argmax(precision * recall)], color='r', linestyle='--', 
-               label=f'Optimal threshold: {optimal_threshold:.3f}')
-    plt.xlabel('Recall')
-    plt.ylabel('Precision')
-    plt.title('Precision-Recall Curve')
-    plt.legend()
-    plt.savefig(os.path.join(analysis_dir, 'precision_recall_curve.png'))
-    plt.close()
-    
-    # Generate detailed statistics
-    print("\nGenerating detailed statistics...")
-    
-    # Mortality rate by body system
-    if 'apache_2_bodysystem' in X_test.columns:
-        body_system_mortality = {}
-        for body_system in X_test['apache_2_bodysystem'].unique():
-            if pd.isna(body_system):
-                continue
-            
-            mask = X_test['apache_2_bodysystem'] == body_system
-            mortality_rate = y_test[mask].mean()
-            count = mask.sum()
-            body_system_mortality[body_system] = {'mortality_rate': mortality_rate, 'count': count}
-        
-        body_system_df = pd.DataFrame(body_system_mortality).T
-        body_system_df = body_system_df.sort_values('mortality_rate', ascending=False)
-        body_system_df.to_csv(os.path.join(analysis_dir, 'mortality_by_body_system.csv'))
-        
-        # Plot mortality rate by body system
-        plt.figure(figsize=(12, 6))
-        sns.barplot(x=body_system_df.index, y=body_system_df['mortality_rate'])
-        plt.title('Mortality Rate by Body System')
-        plt.ylabel('Mortality Rate')
-        plt.xlabel('Body System')
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-        plt.savefig(os.path.join(analysis_dir, 'mortality_by_body_system.png'))
-        plt.close()
-    
-    print(f"\nAnalysis completed. Results saved to {analysis_dir}")
+    print("\nAnalysis pipeline completed successfully!")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

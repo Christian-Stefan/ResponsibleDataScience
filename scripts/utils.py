@@ -2,12 +2,30 @@ import pandas as pd
 import numpy as np
 import os
 import pickle
-from sklearn.metrics import roc_auc_score, precision_score, recall_score, f1_score
+from sklearn.metrics import (
+    roc_auc_score, 
+    precision_score, 
+    recall_score, 
+    f1_score, 
+    accuracy_score,
+    precision_recall_curve,
+    auc
+)
+import config
 
 
 def print_dataset_info(df):
-    print("Number of samples\t:", df.shape[0])
-    print("Number of features\t:", df.shape[1])
+    """Print basic information about the dataset."""
+    print("\nDataset Information:")
+    print(f"Shape: {df.shape}")
+    print("\nColumns:")
+    print(df.columns.tolist())
+    print("\nData Types:")
+    print(df.dtypes)
+    print("\nMissing Values:")
+    print(df.isnull().sum())
+    print("\nBasic Statistics:")
+    print(df.describe())
 
 
 def describe_variable(variable_name, description_dict):
@@ -32,16 +50,18 @@ def print_mortality_stats(df, target_col='hospital_death'):
 
 
 def compare_models(models_results, metric='roc_auc'):
+    """Compare models based on a specified metric."""
     comparison = {}
-    for model_name, results in models_results.items():
-        if metric == 'roc_auc':
-            comparison[model_name] = results['roc_auc']
-        elif metric == 'accuracy':
-            comparison[model_name] = results['accuracy']
-        elif metric in ['precision', 'recall', 'f1']:
-            comparison[model_name] = results['report']['1'][metric]
-    comparison_df = pd.DataFrame({metric: comparison}).sort_values(metric, ascending=False)
+    for name, results in models_results.items():
+        if metric in results:
+            comparison[name] = results[metric]
+    
+    comparison_df = pd.DataFrame.from_dict(comparison, orient='index', columns=[metric])
+    comparison_df = comparison_df.sort_values(metric, ascending=False)
+    
     best_model = comparison_df.index[0]
+    print(f"\nBest model: {best_model} ({metric}: {comparison_df[metric][0]:.3f})")
+    
     return comparison_df, best_model
 
 
@@ -142,3 +162,206 @@ def export_model_performance(model_name, X_test, y_test, model, filename='model_
     else:
         performance_df.to_csv(filename, index=False)
     print(f"Model performance exported to {filename}")
+
+
+def calculate_fairness_metrics(y_true, y_pred, sensitive_features):
+    """Calculate various fairness metrics for different groups."""
+    fairness_metrics = {}
+    
+    for group in sensitive_features.unique():
+        mask = sensitive_features == group
+        if mask.sum() > 0:
+            y_true_group = y_true[mask]
+            y_pred_group = y_pred[mask]
+            
+            # Calculate metrics
+            prediction_rate = np.mean(y_pred_group)
+            true_positive_rate = np.mean(y_pred_group[y_true_group == 1])
+            false_positive_rate = np.mean(y_pred_group[y_true_group == 0])
+            
+            fairness_metrics[group] = {
+                'prediction_rate': prediction_rate,
+                'true_positive_rate': true_positive_rate,
+                'false_positive_rate': false_positive_rate,
+                'n_samples': mask.sum()
+            }
+    
+    return pd.DataFrame.from_dict(fairness_metrics, orient='index')
+
+
+def analyze_intersectional_fairness(X, y, y_pred, protected_attributes):
+    """Analyze fairness metrics across intersections of protected attributes."""
+    results = []
+    
+    for attr in protected_attributes:
+        if attr not in X.columns:
+            print(f"Protected attribute {attr} not available in the dataset.")
+            continue
+        
+        for value in X[attr].unique():
+            mask = X[attr] == value
+            if mask.sum() > 0:
+                y_true_subgroup = y[mask]
+                y_pred_subgroup = y_pred[mask]
+                
+                # Calculate metrics
+                prediction_rate = np.mean(y_pred_subgroup)
+                true_positive_rate = np.mean(y_pred_subgroup[y_true_subgroup == 1])
+                false_positive_rate = np.mean(y_pred_subgroup[y_true_subgroup == 0])
+                
+                results.append({
+                    'attribute': attr,
+                    'value': value,
+                    'n_samples': mask.sum(),
+                    'prediction_rate': prediction_rate,
+                    'true_positive_rate': true_positive_rate,
+                    'false_positive_rate': false_positive_rate
+                })
+    
+    return pd.DataFrame(results)
+
+
+def calculate_intersectional_metrics(X, y, y_pred, protected_attributes):
+    """Calculate intersectional fairness metrics."""
+    results = []
+    
+    # Create all possible combinations of protected attributes
+    for attr1 in protected_attributes:
+        for attr2 in protected_attributes:
+            if attr1 >= attr2:  # Avoid duplicate combinations
+                continue
+                
+            if attr1 not in X.columns or attr2 not in X.columns:
+                continue
+            
+            for val1 in X[attr1].unique():
+                for val2 in X[attr2].unique():
+                    mask = (X[attr1] == val1) & (X[attr2] == val2)
+                    if mask.sum() > 0:
+                        y_true_subgroup = y[mask]
+                        y_pred_subgroup = y_pred[mask]
+                        
+                        # Calculate metrics
+                        prediction_rate = np.mean(y_pred_subgroup)
+                        true_positive_rate = np.mean(y_pred_subgroup[y_true_subgroup == 1])
+                        false_positive_rate = np.mean(y_pred_subgroup[y_true_subgroup == 0])
+                        
+                        results.append({
+                            'attribute1': attr1,
+                            'value1': val1,
+                            'attribute2': attr2,
+                            'value2': val2,
+                            'n_samples': mask.sum(),
+                            'prediction_rate': prediction_rate,
+                            'true_positive_rate': true_positive_rate,
+                            'false_positive_rate': false_positive_rate
+                        })
+    
+    return pd.DataFrame(results)
+
+
+def calculate_disparate_impact(y_true, y_pred, sensitive_features):
+    """Calculate disparate impact ratio for different groups."""
+    disparate_impact = {}
+    
+    for group in sensitive_features.unique():
+        mask = sensitive_features == group
+        if mask.sum() > 0:
+            y_pred_group = y_pred[mask]
+            prediction_rate = np.mean(y_pred_group)
+            disparate_impact[group] = prediction_rate
+    
+    # Calculate ratio relative to majority group
+    majority_group = max(disparate_impact.items(), key=lambda x: x[1])[0]
+    majority_rate = disparate_impact[majority_group]
+    
+    for group in disparate_impact:
+        disparate_impact[group] = disparate_impact[group] / majority_rate
+    
+    return pd.Series(disparate_impact)
+
+
+def calculate_equal_opportunity(y_true, y_pred, sensitive_features):
+    """Calculate equal opportunity difference for different groups."""
+    equal_opportunity = {}
+    
+    for group in sensitive_features.unique():
+        mask = sensitive_features == group
+        if mask.sum() > 0:
+            y_true_group = y_true[mask]
+            y_pred_group = y_pred[mask]
+            true_positive_rate = np.mean(y_pred_group[y_true_group == 1])
+            equal_opportunity[group] = true_positive_rate
+    
+    # Calculate difference from majority group
+    majority_group = max(equal_opportunity.items(), key=lambda x: x[1])[0]
+    majority_rate = equal_opportunity[majority_group]
+    
+    for group in equal_opportunity:
+        equal_opportunity[group] = equal_opportunity[group] - majority_rate
+    
+    return pd.Series(equal_opportunity)
+
+
+def calculate_predictive_parity(y_true, y_pred, sensitive_features):
+    """Calculate predictive parity difference for different groups."""
+    predictive_parity = {}
+    
+    for group in sensitive_features.unique():
+        mask = sensitive_features == group
+        if mask.sum() > 0:
+            y_true_group = y_true[mask]
+            y_pred_group = y_pred[mask]
+            positive_predictive_value = np.mean(y_true_group[y_pred_group == 1])
+            predictive_parity[group] = positive_predictive_value
+    
+    # Calculate difference from majority group
+    majority_group = max(predictive_parity.items(), key=lambda x: x[1])[0]
+    majority_rate = predictive_parity[majority_group]
+    
+    for group in predictive_parity:
+        predictive_parity[group] = predictive_parity[group] - majority_rate
+    
+    return pd.Series(predictive_parity)
+
+
+def calculate_balanced_accuracy(y_true, y_pred):
+    """Calculate balanced accuracy score."""
+    sensitivity = recall_score(y_true, y_pred)
+    specificity = recall_score(y_true, y_pred, pos_label=0)
+    return (sensitivity + specificity) / 2
+
+
+def calculate_f1_score(y_true, y_pred):
+    """Calculate F1 score."""
+    return f1_score(y_true, y_pred)
+
+
+def calculate_auc_roc(y_true, y_pred_proba):
+    """Calculate AUC-ROC score."""
+    return roc_auc_score(y_true, y_pred_proba)
+
+
+def calculate_auc_pr(y_true, y_pred_proba):
+    """Calculate AUC-PR score."""
+    precision, recall, _ = precision_recall_curve(y_true, y_pred_proba)
+    return auc(recall, precision)
+
+
+def calculate_calibration_error(y_true, y_pred_proba, n_bins=10):
+    """Calculate calibration error using equal-width binning."""
+    bin_edges = np.linspace(0, 1, n_bins + 1)
+    bin_indices = np.digitize(y_pred_proba, bin_edges) - 1
+    bin_indices = np.clip(bin_indices, 0, n_bins - 1)
+    
+    calibration_error = 0
+    for bin_idx in range(n_bins):
+        mask = bin_indices == bin_idx
+        if mask.sum() > 0:
+            bin_true = y_true[mask]
+            bin_pred = y_pred_proba[mask]
+            bin_mean_true = np.mean(bin_true)
+            bin_mean_pred = np.mean(bin_pred)
+            calibration_error += np.abs(bin_mean_true - bin_mean_pred) * mask.sum()
+    
+    return calibration_error / len(y_true)
