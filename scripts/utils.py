@@ -65,33 +65,6 @@ def compare_models(models_results, metric='roc_auc'):
     return comparison_df, best_model
 
 
-def create_submission_file(ids, predictions, filename='submission.csv'):
-    submission = pd.DataFrame({
-        'encounter_id': ids,
-        'hospital_death': predictions
-    })
-    submission.to_csv(filename, index=False)
-    print(f"Submission file created: {filename}")
-
-
-def log_experiment_results(experiment_name, params, metrics, filename='experiment_log.csv'):
-    log_entry = {
-        'experiment_name': experiment_name,
-        'timestamp': pd.Timestamp.now(),
-    }
-    for param_name, param_value in params.items():
-        log_entry[f'param_{param_name}'] = param_value
-    for metric_name, metric_value in metrics.items():
-        log_entry[f'metric_{metric_name}'] = metric_value
-    log_df = pd.DataFrame([log_entry])
-    file_exists = os.path.isfile(filename)
-    if file_exists:
-        log_df.to_csv(filename, mode='a', header=False, index=False)
-    else:
-        log_df.to_csv(filename, index=False)
-    print(f"Experiment logged to {filename}")
-
-
 def get_optimal_threshold(y_true, y_proba, metric='f1'):
     thresholds = np.linspace(0.01, 0.99, 99)
     scores = []
@@ -162,102 +135,6 @@ def export_model_performance(model_name, X_test, y_test, model, filename='model_
     else:
         performance_df.to_csv(filename, index=False)
     print(f"Model performance exported to {filename}")
-
-
-def calculate_fairness_metrics(y_true, y_pred, sensitive_features):
-    """Calculate various fairness metrics for different groups."""
-    fairness_metrics = {}
-    
-    for group in sensitive_features.unique():
-        mask = sensitive_features == group
-        if mask.sum() > 0:
-            y_true_group = y_true[mask]
-            y_pred_group = y_pred[mask]
-            
-            # Calculate metrics
-            prediction_rate = np.mean(y_pred_group)
-            true_positive_rate = np.mean(y_pred_group[y_true_group == 1])
-            false_positive_rate = np.mean(y_pred_group[y_true_group == 0])
-            
-            fairness_metrics[group] = {
-                'prediction_rate': prediction_rate,
-                'true_positive_rate': true_positive_rate,
-                'false_positive_rate': false_positive_rate,
-                'n_samples': mask.sum()
-            }
-    
-    return pd.DataFrame.from_dict(fairness_metrics, orient='index')
-
-
-def analyze_intersectional_fairness(X, y, y_pred, protected_attributes):
-    """Analyze fairness metrics across intersections of protected attributes."""
-    results = []
-    
-    for attr in protected_attributes:
-        if attr not in X.columns:
-            print(f"Protected attribute {attr} not available in the dataset.")
-            continue
-        
-        for value in X[attr].unique():
-            mask = X[attr] == value
-            if mask.sum() > 0:
-                y_true_subgroup = y[mask]
-                y_pred_subgroup = y_pred[mask]
-                
-                # Calculate metrics
-                prediction_rate = np.mean(y_pred_subgroup)
-                true_positive_rate = np.mean(y_pred_subgroup[y_true_subgroup == 1])
-                false_positive_rate = np.mean(y_pred_subgroup[y_true_subgroup == 0])
-                
-                results.append({
-                    'attribute': attr,
-                    'value': value,
-                    'n_samples': mask.sum(),
-                    'prediction_rate': prediction_rate,
-                    'true_positive_rate': true_positive_rate,
-                    'false_positive_rate': false_positive_rate
-                })
-    
-    return pd.DataFrame(results)
-
-
-def calculate_intersectional_metrics(X, y, y_pred, protected_attributes):
-    """Calculate intersectional fairness metrics."""
-    results = []
-    
-    # Create all possible combinations of protected attributes
-    for attr1 in protected_attributes:
-        for attr2 in protected_attributes:
-            if attr1 >= attr2:  # Avoid duplicate combinations
-                continue
-                
-            if attr1 not in X.columns or attr2 not in X.columns:
-                continue
-            
-            for val1 in X[attr1].unique():
-                for val2 in X[attr2].unique():
-                    mask = (X[attr1] == val1) & (X[attr2] == val2)
-                    if mask.sum() > 0:
-                        y_true_subgroup = y[mask]
-                        y_pred_subgroup = y_pred[mask]
-                        
-                        # Calculate metrics
-                        prediction_rate = np.mean(y_pred_subgroup)
-                        true_positive_rate = np.mean(y_pred_subgroup[y_true_subgroup == 1])
-                        false_positive_rate = np.mean(y_pred_subgroup[y_true_subgroup == 0])
-                        
-                        results.append({
-                            'attribute1': attr1,
-                            'value1': val1,
-                            'attribute2': attr2,
-                            'value2': val2,
-                            'n_samples': mask.sum(),
-                            'prediction_rate': prediction_rate,
-                            'true_positive_rate': true_positive_rate,
-                            'false_positive_rate': false_positive_rate
-                        })
-    
-    return pd.DataFrame(results)
 
 
 def calculate_disparate_impact(y_true, y_pred, sensitive_features):

@@ -166,8 +166,8 @@ def train_and_evaluate_all_imputation_strategies(X_train, X_test, y_train, y_tes
     for strategy in strategies:
         print(f"\nTraining model with {strategy} imputation...")
         
-        # Create preprocessing pipeline
-        preprocessor = create_preprocessing_pipeline(numerical_cols, categorical_cols)
+        # Create preprocessing pipeline with the current strategy
+        preprocessor = create_preprocessing_pipeline(numerical_cols, categorical_cols, strategy)
         
         # Create classifier
         classifier = RandomForestClassifier(
@@ -473,123 +473,66 @@ def analyze_with_shap_cached(model, X_test, feature_names=None, cache_file=None)
         return None
 
 def explain_with_lime(model, X_train, instance, feature_names=None, class_names=None):
-    """Explain a prediction using LIME.
-    
-    Args:
-        model: The trained model
-        X_train: Training data used to train the model
-        instance: The instance to explain
-        feature_names: List of feature names
-        class_names: List of class names
-    """
-    import lime
+    """Explain a prediction using LIME."""
     import lime.lime_tabular
     import numpy as np
     import os
-    import config
     import pandas as pd
     
-    try:
-        # Get preprocessed training data
-        preprocessor = model.named_steps['preprocessor']
-        X_train_transformed = preprocessor.transform(X_train)
-        
-        # Convert to dense array if sparse
-        if hasattr(X_train_transformed, 'toarray'):
-            X_train_transformed = X_train_transformed.toarray()
-        
-        # Get feature names if not provided
-        if feature_names is None:
-            try:
-                # Get feature names from preprocessor
-                num_features = preprocessor.named_transformers_['num'].get_feature_names_out()
-                cat_features = preprocessor.named_transformers_['cat'].get_feature_names_out()
-                feature_names = np.concatenate([num_features, cat_features])
-            except (AttributeError, ValueError) as e:
-                print(f"Warning: Could not get feature names from preprocessor: {str(e)}")
-                feature_names = [f"feature_{i}" for i in range(X_train_transformed.shape[1])]
-        
-        # Ensure feature_names matches the number of features
-        n_features = X_train_transformed.shape[1]
-        if len(feature_names) != n_features:
-            print(f"Warning: Number of feature names ({len(feature_names)}) doesn't match number of features ({n_features})")
-            feature_names = [f"feature_{i}" for i in range(n_features)]
-        
-        # Create LIME explainer
-        explainer = lime.lime_tabular.LimeTabularExplainer(
-            X_train_transformed,
-            feature_names=feature_names,
-            class_names=class_names if class_names else ['Survive', 'Die'],
-            mode='classification',
-            training_labels=None,
-            discretize_continuous=True
-        )
-        
-        # Transform the instance
-        instance_df = pd.DataFrame([instance])
-        instance_transformed = preprocessor.transform(instance_df)
-        if hasattr(instance_transformed, 'toarray'):
-            instance_transformed = instance_transformed.toarray()
-        
-        # Ensure instance_transformed is 2D
-        if len(instance_transformed.shape) == 1:
-            instance_transformed = instance_transformed.reshape(1, -1)
-        
-        # Create prediction function that works with preprocessed data
-        def predict_fn(x):
-            if len(x.shape) == 1:
-                x = x.reshape(1, -1)
-            return model.named_steps['classifier'].predict_proba(x)
-        
-        # Generate explanation
-        explanation = explainer.explain_instance(
-            instance_transformed[0],  # Use first row since we only have one instance
-            predict_fn,
-            num_features=10,
-            top_labels=1,
-            num_samples=5000
-        )
-        
-        if explanation is not None:
-            # Save explanation visualization
-            output_path = os.path.join(config.RESULTS_DIR, 'lime_explanation.html')
-            explanation.save_to_file(output_path)
-            print(f"LIME explanation saved to {output_path}")
-            return explanation
-        else:
-            print("Failed to generate LIME explanation")
-            return None
-        
-    except Exception as e:
-        print(f"Error in LIME explanation: {str(e)}")
-        import traceback
-        print(traceback.format_exc())  # Print full traceback for debugging
-        return None
-
-def plot_heatmap(data, title="Heatmap", xlabel="X", ylabel="Y"):
-    plt.figure(figsize=(10, 8))
-    sns.heatmap(data, annot=True, fmt=".2f", cmap="viridis")
-    plt.title(title)
-    plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
-    plt.tight_layout()
-    plt.show()
-
-def create_lasso_pipeline(preprocessor, C=1.0, random_state=1):
-    pipeline = Pipeline(steps=[
-        ('preprocessor', preprocessor),
-        ('classifier', LogisticRegression(
-            penalty='l1',
-            solver='saga',
-            C=C,
-            random_state=random_state,
-            max_iter=10000
-        ))
-    ])
-    return pipeline
-
-def explain_lasso_with_lime(lasso_model, X_train, instance, feature_names, class_names, num_features=10):
-    return explain_with_lime(lasso_model, X_train, instance, feature_names, class_names, num_features)
+    preprocessor = model.named_steps['preprocessor']
+    X_train_transformed = preprocessor.transform(X_train)
+    
+    if hasattr(X_train_transformed, 'toarray'):
+        X_train_transformed = X_train_transformed.toarray()
+    
+    if feature_names is None:
+        try:
+            num_features = preprocessor.named_transformers_['num'].get_feature_names_out()
+            cat_features = preprocessor.named_transformers_['cat'].get_feature_names_out()
+            feature_names = np.concatenate([num_features, cat_features])
+        except:
+            feature_names = [f"feature_{i}" for i in range(X_train_transformed.shape[1])]
+    
+    n_features = X_train_transformed.shape[1]
+    if len(feature_names) != n_features:
+        print(f"Warning: Number of feature names ({len(feature_names)}) doesn't match number of features ({n_features})")
+        feature_names = [f"feature_{i}" for i in range(n_features)]
+    
+    explainer = lime.lime_tabular.LimeTabularExplainer(
+        X_train_transformed,
+        feature_names=feature_names,
+        class_names=class_names if class_names else ['Survive', 'Die'],
+        mode='classification',
+        discretize_continuous=True
+    )
+    
+    instance_df = pd.DataFrame([instance])
+    instance_transformed = preprocessor.transform(instance_df)
+    if hasattr(instance_transformed, 'toarray'):
+        instance_transformed = instance_transformed.toarray()
+    
+    if len(instance_transformed.shape) == 1:
+        instance_transformed = instance_transformed.reshape(1, -1)
+    
+    def predict_fn(x):
+        if len(x.shape) == 1:
+            x = x.reshape(1, -1)
+        return model.named_steps['classifier'].predict_proba(x)
+    
+    explanation = explainer.explain_instance(
+        instance_transformed[0],
+        predict_fn,
+        num_features=10,
+        top_labels=1,
+        num_samples=5000
+    )
+    
+    if explanation is not None:
+        output_path = os.path.join(config.RESULTS_DIR, 'lime_explanation.html')
+        explanation.save_to_file(output_path)
+        print(f"LIME explanation saved to {output_path}")
+    
+    return explanation
 
 def evaluate_fairness_with_fairlearn(y_true, y_pred, sensitive_features):
     metrics = {
@@ -614,14 +557,9 @@ def analyze_intersectional_fairness(model, X_test, y_test, protected_attributes)
     """Analyze fairness metrics across intersections of protected attributes."""
     results = []
     
-    # Create progress bar for protected attributes
-    pbar = tqdm(protected_attributes, desc="Analyzing fairness")
-    
-    # Create all possible combinations of protected attributes
-    for attr in pbar:
-        pbar.set_description(f"Analyzing {attr}")
+    for attr in protected_attributes:
         if attr not in X_test.columns:
-            pbar.write(f"Protected attribute {attr} not available in the dataset.")
+            print(f"Protected attribute {attr} not available in the dataset.")
             continue
         
         for value in X_test[attr].unique():
@@ -630,11 +568,9 @@ def analyze_intersectional_fairness(model, X_test, y_test, protected_attributes)
                 X_subgroup = X_test[mask]
                 y_subgroup = y_test[mask]
                 
-                # Get predictions
                 y_pred = model.predict(X_subgroup)
                 y_pred_proba = model.predict_proba(X_subgroup)[:, 1]
                 
-                # Calculate metrics
                 prediction_rate = np.mean(y_pred)
                 true_positive_rate = np.mean(y_pred[y_subgroup == 1])
                 false_positive_rate = np.mean(y_pred[y_subgroup == 0])

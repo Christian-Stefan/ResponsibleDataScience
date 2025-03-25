@@ -11,18 +11,14 @@ import config
 
 def load_data(data_dir):
     """Load the ICU dataset and its description dictionary."""
-    try:
-        # Load main dataset
-        df = pd.read_csv(os.path.join(data_dir, 'training_v2.csv'))
-        
-        # Load data dictionary
-        description_dict = pd.read_csv(os.path.join(data_dir, 'WiDS_Datathon_2020_Dictionary.csv'))
-        description_dict = dict(zip(description_dict['Variable Name'], description_dict['Description']))
-        
-        return df, description_dict
-    except Exception as e:
-        print(f"Error loading data: {e}")
-        return None, None
+    # Load main dataset
+    df = pd.read_csv(os.path.join(data_dir, 'training_v2.csv'))
+    
+    # Load data dictionary
+    description_dict = pd.read_csv(os.path.join(data_dir, 'WiDS_Datathon_2020_Dictionary.csv'))
+    description_dict = dict(zip(description_dict['Variable Name'], description_dict['Description']))
+    
+    return df, description_dict
 
 def analyze_missing_values(df):
     """Analyze missing values in the dataset."""
@@ -90,11 +86,17 @@ def filter_high_missing_columns(X_train, X_test, threshold=80):
     
     return X_train, X_test, high_missing_cols
 
-def create_preprocessing_pipeline(numerical_cols, categorical_cols):
-    """Create preprocessing pipeline for numerical and categorical features."""
+def create_preprocessing_pipeline(numerical_cols, categorical_cols, strategy='mean'):
+    """Create preprocessing pipeline for numerical and categorical features.
+    
+    Args:
+        numerical_cols: List of numerical column names
+        categorical_cols: List of categorical column names
+        strategy: Imputation strategy for numerical features ('mean', 'median', or 'most_frequent')
+    """
     # Numerical preprocessing
     numerical_transformer = Pipeline(steps=[
-        ('imputer', SimpleImputer(strategy='mean')),
+        ('imputer', SimpleImputer(strategy=strategy)),
         ('scaler', StandardScaler())
     ])
     

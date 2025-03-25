@@ -10,6 +10,7 @@ import os
 
 # Add color mappings at the top of the file after imports
 # Color mappings for consistent visualization
+# An LLM generated color scheme
 ETHNICITY_COLORS = {
     'Caucasian': '#2ecc71',      # Green
     'African American': '#3498db', # Blue
@@ -316,16 +317,7 @@ def plot_precision_recall_curves_comparison(y_true, y_pred_dict):
     save_plot(fig, 'precision_recall_curves.png')
 
 def plot_feature_importance(importance_df, title='Feature Importance', top_n=20, figsize=(12, 8), save_path=None):
-    """
-    Plot feature importance from a DataFrame.
-    
-    Args:
-        importance_df: DataFrame with columns 'Feature' and 'Importance'
-        title: Plot title
-        top_n: Number of top features to display
-        figsize: Figure size
-        save_path: Path to save the figure
-    """
+
     # Take top N features
     df = importance_df.head(top_n)
     
@@ -414,35 +406,6 @@ def plot_performance_by_body_system(body_system_df, metrics):
     plt.tight_layout()
     save_plot(fig, 'body_system_rates.png')
 
-def plot_body_system_analysis_results(body_system_results, body_system_df, feature_names):
-    """Plot detailed body system analysis results."""
-    # Plot AUC by body system
-    plt.figure(figsize=(12, 6))
-    body_system_auc = {system: results['results']['roc_auc'] 
-                      for system, results in body_system_results.items()}
-    sns.barplot(x=list(body_system_auc.keys()), y=list(body_system_auc.values()))
-    plt.title('AUC Score by Body System')
-    plt.xlabel('Body System')
-    plt.ylabel('AUC Score')
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.savefig(os.path.join(config.RESULTS_DIR, 'body_system_auc.png'))
-    plt.close()
-    
-    # Plot feature importance by body system
-    for system, results in body_system_results.items():
-        plt.figure(figsize=(12, 6))
-        importance_df = pd.DataFrame({
-            'Feature': feature_names[:len(results['feature_importances'])],
-            'Importance': results['feature_importances']
-        }).sort_values('Importance', ascending=False)
-        
-        sns.barplot(x='Importance', y='Feature', data=importance_df.head(10))
-        plt.title(f'Top 10 Feature Importances - {system}')
-        plt.tight_layout()
-        plt.savefig(os.path.join(config.RESULTS_DIR, f'feature_importance_{system}.png'))
-        plt.close()
-
 def plot_threshold_analysis_results(thresholds_analysis):
     """Plot results of threshold analysis."""
     plt.figure(figsize=(12, 8))
@@ -485,30 +448,6 @@ def plot_fairness_metrics(fairness_df, metrics_by_ethnicity):
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     save_plot(fig, 'fairness_metrics_comparison.png')
-
-def plot_roc_curves_by_ethnicity(X_test, y_test, y_proba):
-    """Plot ROC curves for different ethnicities."""
-    if 'ethnicity' not in X_test.columns:
-        print("Warning: Ethnicity column not found in the dataset.")
-        return
-    
-    fig = plt.figure(figsize=(10, 8))
-    
-    # Plot ROC curve for each ethnicity
-    for ethnicity in X_test['ethnicity'].unique():
-        mask = X_test['ethnicity'] == ethnicity
-        if mask.sum() > 0:
-            fpr, tpr, _ = roc_curve(y_test[mask], y_proba[mask])
-            auc_score = roc_auc_score(y_test[mask], y_proba[mask])
-            plt.plot(fpr, tpr, label=f'{ethnicity} (AUC = {auc_score:.3f})')
-    
-    plt.plot([0, 1], [0, 1], 'k--')
-    plt.xlabel('False Positive Rate')
-    plt.ylabel('True Positive Rate')
-    plt.title('ROC Curves by Ethnicity')
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
-    save_plot(fig, 'roc_curves_by_ethnicity.png')
 
 def plot_roc_curves_by_body_system(X_test, y_test, y_proba, top_n=5):
     """Plot ROC curves for the top N body systems by sample size."""
@@ -560,7 +499,6 @@ def plot_roc_curves_by_body_system(X_test, y_test, y_proba, top_n=5):
     return metrics_df
 
 def plot_comprehensive_ethnicity_analysis(X_test, y_test, y_proba):
-    """Create a comprehensive visualization of model performance across ethnicities."""
     if 'ethnicity' not in X_test.columns:
         print("Warning: Ethnicity column not found in the dataset.")
         return
@@ -646,13 +584,7 @@ def plot_confusion_matrix(cm, title, filename):
     save_plot(fig, filename)
 
 def plot_all_confusion_matrices(y_true, y_pred, y_pred_proba):
-    """Plot confusion matrices with different thresholds and styling.
-    
-    Args:
-        y_true: True labels
-        y_pred: Predicted labels
-        y_pred_proba: Predicted probabilities
-    """
+
     import matplotlib.pyplot as plt
     import seaborn as sns
     from sklearn.metrics import confusion_matrix
@@ -689,16 +621,7 @@ def plot_all_confusion_matrices(y_true, y_pred, y_pred_proba):
     plt.close()
 
 def plot_partial_dependence(pdp_result, X, features, figsize=(15, 10), save_path=None):
-    """
-    Plot partial dependence plots for the given features.
-    
-    Args:
-        pdp_result: Result object from partial_dependence
-        X: Feature data used to compute percentiles
-        features: List of feature names or indices
-        figsize: Figure size
-        save_path: Path to save the figure
-    """
+
     import matplotlib.pyplot as plt
     import numpy as np
     

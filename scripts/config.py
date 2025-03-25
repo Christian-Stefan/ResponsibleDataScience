@@ -13,7 +13,7 @@ for directory in [DATA_DIR, MODELS_DIR, RESULTS_DIR]:
 # Data processing settings
 TARGET_COLUMN = 'hospital_death'
 TEST_SIZE = 0.2
-RANDOM_STATE = 42
+RANDOM_STATE = 1
 MISSING_THRESHOLD_HIGH = 80
 
 # Imputation strategies
@@ -67,22 +67,9 @@ SHAP_N_FEATURES = 20
 LIME_N_FEATURES = 10
 LIME_N_SAMPLES = 1000
 
-# Body system analysis settings
-MIN_SAMPLES_PER_SYSTEM = 100
-MIN_TEST_SAMPLES_PER_SYSTEM = 20
-
 # Threshold analysis settings
 THRESHOLD_STEP = 0.05
 THRESHOLD_RANGE = (0.1, 0.9)
 
-# Calibration settings
-N_CALIBRATION_BINS = 10
-
 # Correlation analysis settings
 CORRELATION_THRESHOLD = 0.8
-
-# Outlier analysis settings
-OUTLIER_THRESHOLD = 3
-
-# Skewness analysis settings
-SKEWNESS_THRESHOLD = 1.0
